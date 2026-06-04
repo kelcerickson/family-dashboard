@@ -51,7 +51,7 @@ export default function VisionSection() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-        <SectionHeader eyebrow="The framework" title="Our Family Operating System" subtitle="Ryan & Brienne · Built to last" />
+        <SectionHeader eyebrow="The framework" title="Our Family Operating System" subtitle="Kelsey & Brienne · Built to last" />
         <SaveStatus status={saveStatus} />
       </div>
 
@@ -112,7 +112,7 @@ export default function VisionSection() {
           <div key={f.key} style={{ background: 'var(--cream-dark)', borderRadius: 'var(--radius-sm)', padding: '0.9rem 1rem' }}>
             <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-faint)', marginBottom: '4px' }}>{f.label}</div>
             {editing
-              ? <TextInput value={String(data[key] || '')} onChange={val => update(f.key, val)} />
+              ? <TextInput value={String(data[f.key] || '')} onChange={val => update(f.key, val)} />
               : <div style={{ fontSize: '18px', fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>{data[f.key]}</div>
             }
           </div>
