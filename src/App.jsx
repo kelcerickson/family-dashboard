@@ -32,7 +32,7 @@ export default function App() {
         <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
             <h1 style={{ fontSize: '16px', fontFamily: 'var(--font-serif)', color: 'var(--ink)', fontWeight: 500 }}>Family OS</h1>
-            <span style={{ fontSize: '12px', color: 'var(--ink-faint)' }}>Ryan & Brienne</span>
+            <span style={{ fontSize: '12px', color: 'var(--ink-faint)' }}>Kelsey & Brienne</span>
           </div>
 
           <nav style={{ display: 'flex', gap: '2px' }}>
