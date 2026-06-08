@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, dbQuery } from '../lib/supabase'
 import { Field, TextArea, TextInput, Card, SectionHeader, Divider, SaveStatus } from './ui'
 
 const DEFAULT_VISION = {
@@ -20,19 +20,35 @@ const DEFAULT_VISION = {
 export default function VisionSection() {
   const [data, setData] = useState(DEFAULT_VISION)
   const [saveStatus, setSaveStatus] = useState(null)
+  const [saveError, setSaveError] = useState(null)
   const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    supabase.from('vision').select('*').eq('id', 1).single().then(({ data: row }) => {
+    dbQuery(
+      () => supabase.from('vision').select('*').eq('id', 1).maybeSingle(),
+      'vision load'
+    ).then(({ data: row }) => {
       if (row) setData({ ...DEFAULT_VISION, ...row })
     })
   }, [])
 
   const save = useCallback(async (updated) => {
     setSaveStatus('saving')
-    await supabase.from('vision').upsert({ id: 1, ...updated, updated_at: new Date().toISOString() })
-    setSaveStatus('saved')
-    setTimeout(() => setSaveStatus(null), 2000)
+    setSaveError(null)
+    const { error } = await dbQuery(
+      () => supabase.from('vision').upsert(
+        { id: 1, ...updated, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      ),
+      'vision save'
+    )
+    if (error) {
+      setSaveError(error.message)
+      setSaveStatus(null)
+    } else {
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2000)
+    }
   }, [])
 
   const update = (key, val) => {
@@ -52,10 +68,12 @@ export default function VisionSection() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
         <SectionHeader eyebrow="The framework" title="Our Family Operating System" subtitle="Kelsey & Brienne · Built to last" />
-        <SaveStatus status={saveStatus} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <SaveStatus status={saveStatus} />
+          {saveError && <span style={{ fontSize: '12px', color: '#E24B4A' }}>Error: {saveError}</span>}
+        </div>
       </div>
 
-      {/* Four Buckets */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '2rem' }}>
         {buckets.map(b => (
           <div key={b.label} style={{ background: b.bg, border: `1px solid ${b.color}22`, borderRadius: 'var(--radius)', padding: '1rem 1.25rem' }}>
@@ -68,7 +86,6 @@ export default function VisionSection() {
 
       <Divider />
 
-      {/* Vision Cards */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h3 style={{ fontSize: '18px', color: 'var(--ink)' }}>Our five-year vision</h3>
         <button className="btn-ghost" style={{ fontSize: '12px', padding: '6px 14px' }} onClick={() => setEditing(!editing)}>
@@ -86,18 +103,16 @@ export default function VisionSection() {
         ].map(({ key, label }) => (
           <Card key={key} style={{ padding: '1rem 1.25rem' }}>
             <div style={{ fontSize: '11px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-faint)', marginBottom: '6px' }}>{label}</div>
-            {editing ? (
-              <TextArea value={data[key]} onChange={val => update(key, val)} rows={3} />
-            ) : (
-              <p style={{ fontSize: '14px', color: 'var(--ink-muted)', lineHeight: 1.7 }}>{data[key]}</p>
-            )}
+            {editing
+              ? <TextArea value={data[key]} onChange={val => update(key, val)} rows={3} />
+              : <p style={{ fontSize: '14px', color: 'var(--ink-muted)', lineHeight: 1.7 }}>{data[key]}</p>
+            }
           </Card>
         ))}
       </div>
 
       <Divider />
 
-      {/* Five-Year Plan */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h3 style={{ fontSize: '18px', color: 'var(--ink)' }}>Five-year roadmap</h3>
         <div style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>2026 → {data.target_year}</div>
@@ -105,9 +120,9 @@ export default function VisionSection() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '1rem' }}>
         {[
-          { label: 'Target year', key: 'target_year', type: 'text' },
-          { label: 'Income goal', key: 'income_goal', type: 'text' },
-          { label: 'Net worth goal', key: 'net_worth_goal', type: 'text' },
+          { label: 'Target year', key: 'target_year' },
+          { label: 'Income goal', key: 'income_goal' },
+          { label: 'Net worth goal', key: 'net_worth_goal' },
         ].map(f => (
           <div key={f.key} style={{ background: 'var(--cream-dark)', borderRadius: 'var(--radius-sm)', padding: '0.9rem 1rem' }}>
             <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-faint)', marginBottom: '4px' }}>{f.label}</div>
