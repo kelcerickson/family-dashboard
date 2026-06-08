@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, dbQuery } from '../lib/supabase'
 import { Field, TextArea, Card, SectionHeader, Divider, SaveStatus } from './ui'
 import { getMondayOfWeek, formatWeekStart, getWeekLabel, getPrevWeekStart } from '../lib/dates'
 
@@ -11,9 +11,9 @@ const BUCKETS = [
 ]
 
 const ALIGNMENT_OPTIONS = [
-  { val: 'yes', label: 'Yes, aligned', color: 'var(--teal)' },
-  { val: 'partial', label: 'Partially', color: 'var(--amber)' },
-  { val: 'no', label: 'No, drifted', color: '#E24B4A' },
+  { val: 'yes', label: 'Yes, aligned' },
+  { val: 'partial', label: 'Partially' },
+  { val: 'no', label: 'No, drifted' },
 ]
 
 const EMPTY_WEEK = { family_action: '', income_action: '', wealth_action: '', freedom_action: '', calendar_aligned: '', drift_causes: '', next_week_changes: '', end_of_week_notes: '', status: 'active' }
@@ -21,10 +21,14 @@ const EMPTY_WEEK = { family_action: '', income_action: '', wealth_action: '', fr
 function WeekCard({ weekStart, readOnly }) {
   const [data, setData] = useState({ ...EMPTY_WEEK })
   const [saveStatus, setSaveStatus] = useState(null)
+  const [saveError, setSaveError] = useState(null)
   const label = getWeekLabel(weekStart)
 
   useEffect(() => {
-    supabase.from('weekly_plans').select('*').eq('week_start', weekStart).single().then(({ data: row }) => {
+    dbQuery(
+      () => supabase.from('weekly_plans').select('*').eq('week_start', weekStart).maybeSingle(),
+      'weekly load'
+    ).then(({ data: row }) => {
       if (row) setData(row)
       else setData({ ...EMPTY_WEEK })
     })
@@ -32,14 +36,21 @@ function WeekCard({ weekStart, readOnly }) {
 
   const save = useCallback(async (updated) => {
     setSaveStatus('saving')
-    const { data: existing } = await supabase.from('weekly_plans').select('id').eq('week_start', weekStart).single()
-    if (existing) {
-      await supabase.from('weekly_plans').update({ ...updated, updated_at: new Date().toISOString() }).eq('week_start', weekStart)
+    setSaveError(null)
+    const { error } = await dbQuery(
+      () => supabase.from('weekly_plans').upsert(
+        { ...updated, week_start: weekStart, updated_at: new Date().toISOString() },
+        { onConflict: 'week_start' }
+      ),
+      'weekly save'
+    )
+    if (error) {
+      setSaveError(error.message)
+      setSaveStatus(null)
     } else {
-      await supabase.from('weekly_plans').insert({ ...updated, week_start: weekStart })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2000)
     }
-    setSaveStatus('saved')
-    setTimeout(() => setSaveStatus(null), 2000)
   }, [weekStart])
 
   const update = (key, val) => {
@@ -61,6 +72,7 @@ function WeekCard({ weekStart, readOnly }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {!readOnly && <SaveStatus status={saveStatus} />}
+          {saveError && <span style={{ fontSize: '12px', color: '#E24B4A' }}>Error: {saveError}</span>}
           {isComplete && (
             <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: 'var(--teal-light)', color: 'var(--teal)', fontWeight: 500 }}>
               Week complete ✓
@@ -79,20 +91,9 @@ function WeekCard({ weekStart, readOnly }) {
         </div>
       </div>
 
-      {/* Weekly actions */}
       <div style={{ display: 'grid', gap: '10px', marginBottom: '1.25rem' }}>
         {BUCKETS.map(b => (
-          <div
-            key={b.key}
-            style={{
-              background: 'var(--white)',
-              border: '1px solid var(--border)',
-              borderLeft: `3px solid ${b.color}`,
-              borderRadius: '0 var(--radius) var(--radius) 0',
-              padding: '1rem 1.25rem',
-              opacity: readOnly && !data[b.key] ? 0.5 : 1,
-            }}
-          >
+          <div key={b.key} style={{ background: 'var(--white)', border: '1px solid var(--border)', borderLeft: `3px solid ${b.color}`, borderRadius: '0 var(--radius) var(--radius) 0', padding: '1rem 1.25rem', opacity: readOnly && !data[b.key] ? 0.5 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--ink)' }}>{b.label}</div>
@@ -110,7 +111,6 @@ function WeekCard({ weekStart, readOnly }) {
         ))}
       </div>
 
-      {/* End-of-week reflection */}
       <Card style={{ background: 'var(--cream)', border: '1px solid var(--border)' }}>
         <p style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-muted)', marginBottom: '1rem' }}>
           {readOnly ? 'Week-end reflection' : 'End-of-week reflection'}
@@ -124,21 +124,9 @@ function WeekCard({ weekStart, readOnly }) {
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               {ALIGNMENT_OPTIONS.map(o => (
-                <button
-                  key={o.val}
-                  onClick={() => update('calendar_aligned', o.val)}
-                  style={{
-                    flex: 1,
-                    padding: '8px 10px',
-                    fontSize: '12px',
-                    background: data.calendar_aligned === o.val ? 'var(--ink)' : 'var(--white)',
-                    color: data.calendar_aligned === o.val ? 'var(--white)' : 'var(--ink-muted)',
-                    border: `1px solid ${data.calendar_aligned === o.val ? 'var(--ink)' : 'var(--border)'}`,
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >{o.label}</button>
+                <button key={o.val} onClick={() => update('calendar_aligned', o.val)} style={{ flex: 1, padding: '8px 10px', fontSize: '12px', background: data.calendar_aligned === o.val ? 'var(--ink)' : 'var(--white)', color: data.calendar_aligned === o.val ? 'var(--white)' : 'var(--ink-muted)', border: `1px solid ${data.calendar_aligned === o.val ? 'var(--ink)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                  {o.label}
+                </button>
               ))}
             </div>
           )}
@@ -165,15 +153,11 @@ function WeekCard({ weekStart, readOnly }) {
 export default function WeeklySection() {
   const thisWeekStart = formatWeekStart(getMondayOfWeek())
   const lastWeekStart = getPrevWeekStart(thisWeekStart)
-
   return (
     <div>
       <SectionHeader eyebrow="Section 5" title="Weekly review" subtitle="Simple. Focused. Every week." />
-
       <WeekCard weekStart={thisWeekStart} readOnly={false} />
-
       <Divider />
-
       <WeekCard weekStart={lastWeekStart} readOnly={true} />
     </div>
   )
